@@ -113,6 +113,48 @@ export default function Minesweeper() {
     checkWin(b);
   };
 
+  const handleChord = (r: number, c: number) => {
+    if (status === 'won' || status === 'lost') return;
+    const cell0 = board[r][c];
+    if (!cell0.revealed || cell0.mine || cell0.count === 0) return;
+    // classic chord: proceed only when flagged neighbors match the number
+    let flagged = 0;
+    for (let dr = -1; dr <= 1; dr++)
+      for (let dc = -1; dc <= 1; dc++) {
+        const nr = r + dr,
+          nc = c + dc;
+        if (nr >= 0 && nr < rows && nc >= 0 && nc < cols && board[nr][nc].flagged) flagged++;
+      }
+    if (flagged !== cell0.count) return;
+    const b = board.map((row) => row.map((cl) => ({ ...cl })));
+    // mine among unflagged neighbors → loss, show all mines
+    let hitMine = false;
+    for (let dr = -1; dr <= 1 && !hitMine; dr++)
+      for (let dc = -1; dc <= 1; dc++) {
+        const nr = r + dr,
+          nc = c + dc;
+        if (nr >= 0 && nr < rows && nc >= 0 && nc < cols) {
+          const nb = b[nr][nc];
+          if (!nb.revealed && !nb.flagged && nb.mine) hitMine = true;
+        }
+      }
+    if (hitMine) {
+      b.forEach((row) => row.forEach((cl) => { if (cl.mine) cl.revealed = true; }));
+      setBoard(b);
+      setStatus('lost');
+      return;
+    }
+    // reveal all unflagged hidden neighbors (revealCascade skips flagged)
+    for (let dr = -1; dr <= 1; dr++)
+      for (let dc = -1; dc <= 1; dc++) {
+        const nr = r + dr,
+          nc = c + dc;
+        if (nr >= 0 && nr < rows && nc >= 0 && nc < cols) revealCascade(b, nr, nc);
+      }
+    setBoard(b);
+    checkWin(b);
+  };
+
   const handleFlag = (e: React.MouseEvent, r: number, c: number) => {
     e.preventDefault();
     if (status === 'won' || status === 'lost') return;
@@ -156,6 +198,7 @@ export default function Minesweeper() {
             <button
               key={`${r}-${c}`}
               onClick={() => handleCell(r, c)}
+              onDoubleClick={() => handleChord(r, c)}
               onContextMenu={(e) => handleFlag(e, r, c)}
               aria-label={cell.revealed ? `cell ${r},${c} ${cell.mine ? 'mine' : cell.count}` : `hidden cell ${r},${c}`}
               style={{
