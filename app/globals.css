@@ -443,8 +443,44 @@ body {
   min-width: 110px;
 }
 
+.ms-share-counter {
+  margin: 8px 0 0;
+  font-size: 0.78rem;
+  color: var(--ms-text-muted);
+  text-align: center;
+}
+
 .ms-mine-emphasis {
   outline: 2px solid #ffeb3b;
   outline-offset: -2px;
   box-shadow: inset 0 0 0 1px #000;
+}
+
+/* ── Daily mode UI ───────────────────────────────────────────────────────── */
+.ms-stat-daily-date {
+  font-family: var(--font-geist-mono), "Courier New", monospace;
+  font-size: 13px;
+  color: var(--ms-text);
+  white-space: nowrap;
+  font-weight: 600;
+}
+
+.ms-stat-streak {
+  font-family: var(--font-geist-mono), "Courier New", monospace;
+  font-size: 13px;
+  color: var(--ms-new-best);
+  white-space: nowrap;
+  font-weight: 700;
+}
+
+.ms-difficulty-badge-daily {
+  background: var(--ms-premium-color);
+  color: #fff;
+}
+
+/* On narrow viewports let the top-bar stats wrap instead of being clipped. */
+@media (max-width: 360px) {
+  .ms-stats {
+    flex-wrap: wrap;
+  }
 }

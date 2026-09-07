@@ -15,6 +15,7 @@ const LEVELS = {
   easy:   { rows: 9,  cols: 9,  mines: 10 },
   medium: { rows: 16, cols: 16, mines: 40 },
   hard:   { rows: 16, cols: 30, mines: 99 },
+  replay: { rows: 9,  cols: 9,  mines: 10 },
 } as const;
 
 type LevelName  = keyof typeof LEVELS;
@@ -68,6 +69,70 @@ function revealCascade(board: Cell[][], r: number, c: number): void {
 function checkWin(board: Cell[][]): boolean {
   for (const row of board) for (const c of row) if (!c.revealed && !c.mine) return false;
   return true;
+}
+
+function createBoardFromPositions(rows: number, cols: number, minePositions: [number, number][]): Cell[][] {
+  const b: Cell[][] = Array.from({ length: rows }, () =>
+    Array.from({ length: cols }, () => ({ mine: false, revealed: false, flagged: false, count: 0 }))
+  );
+  for (const [r, c] of minePositions) {
+    if (r >= 0 && r < rows && c >= 0 && c < cols) b[r][c].mine = true;
+  }
+  for (let r = 0; r < rows; r++)
+    for (let c = 0; c < cols; c++) {
+      if (b[r][c].mine) continue;
+      let n = 0;
+      for (let dr = -1; dr <= 1; dr++)
+        for (let dc = -1; dc <= 1; dc++) {
+          const nr = r + dr, nc = c + dc;
+          if (nr >= 0 && nr < rows && nc >= 0 && nc < cols && b[nr][nc].mine) n++;
+        }
+      b[r][c].count = n;
+    }
+  return b;
+}
+
+// Compact URL-safe encoding: 6-byte header (rows, cols, mines BE u16 each)
+// + ceil(rows*cols/8) bytes for mine bitmask (bit 0 of byte 0 = cell (0,0)).
+// Base64 alphabet replaced: + → -, / → _, = padding stripped.
+function encodeBoard(rows: number, cols: number, mines: number, minePositions: [number, number][]): string {
+  const bitBytes = Math.ceil((rows * cols) / 8);
+  const buf = new Uint8Array(6 + bitBytes);
+  buf[0] = (rows >> 8) & 0xff;  buf[1] = rows & 0xff;
+  buf[2] = (cols >> 8) & 0xff;  buf[3] = cols & 0xff;
+  buf[4] = (mines >> 8) & 0xff; buf[5] = mines & 0xff;
+  for (const [r, c] of minePositions) {
+    const bit = r * cols + c;
+    buf[6 + (bit >> 3)] |= (1 << (7 - (bit & 7)));
+  }
+  let bin = '';
+  for (let i = 0; i < buf.length; i++) bin += String.fromCharCode(buf[i]);
+  return btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+
+function decodeBoard(id: string): { rows: number; cols: number; mines: number; minePositions: [number, number][] } | null {
+  try {
+    const bin = atob(id.replace(/-/g, '+').replace(/_/g, '/'));
+    if (bin.length < 6) return null;
+    const rows  = (bin.charCodeAt(0) << 8) | bin.charCodeAt(1);
+    const cols  = (bin.charCodeAt(2) << 8) | bin.charCodeAt(3);
+    const mines = (bin.charCodeAt(4) << 8) | bin.charCodeAt(5);
+    if (!Number.isFinite(rows) || !Number.isFinite(cols) || !Number.isFinite(mines)) return null;
+    if (rows < 1 || rows > 30 || cols < 1 || cols > 30) return null;
+    if (mines < 1 || mines >= rows * cols) return null;
+    const minePositions: [number, number][] = [];
+    for (let i = 0; i < rows * cols; i++) {
+      const byteIdx = 6 + (i >> 3);
+      if (byteIdx >= bin.length) break;
+      if (bin.charCodeAt(byteIdx) & (1 << (7 - (i & 7)))) {
+        minePositions.push([Math.floor(i / cols), i % cols]);
+      }
+    }
+    if (minePositions.length !== mines) return null;
+    return { rows, cols, mines, minePositions };
+  } catch {
+    return null;
+  }
 }
 
 // ── Sound ──────────────────────────────────────────────────────────────────
@@ -147,6 +212,10 @@ export default function Minesweeper() {
   const [streaks,     setStreaks]     = useState<Partial<Record<LevelName, number>>>({});
   const [revealMines, setRevealMines] = useState(false);
   const [shareStatus, setShareStatus] = useState<'idle' | 'copied' | 'failed'>('idle');
+  const [replayConfig,   setReplayConfig]   = useState<{ rows: number; cols: number; mines: number } | null>(null);
+  const [gameLinkStatus, setGameLinkStatus] = useState<'idle' | 'copied' | 'failed'>('idle');
+  const [visitCount,     setVisitCount]     = useState(0);
+  const [isOwner,        setIsOwner]        = useState(false);
   const [cellSize,    setCellSize]    = useState(() => {
     if (typeof window === 'undefined') return 32;
     const { cols } = LEVELS.easy;
@@ -159,7 +228,18 @@ export default function Minesweeper() {
   const longPressed   = useRef(false);
   const elapsedRef    = useRef(0);
 
-  const { rows, cols, mines } = LEVELS[level];
+  const { rows, cols, mines } = replayConfig ?? LEVELS[level];
+
+  // ── Board id (only meaningful once the game is over) ────────────────────
+
+  const boardId = useMemo<string | null>(() => {
+    if (status !== 'won' && status !== 'lost') return null;
+    const positions: [number, number][] = [];
+    for (let r = 0; r < board.length; r++)
+      for (let c = 0; c < board[r].length; c++)
+        if (board[r][c].mine) positions.push([r, c]);
+    return encodeBoard(rows, cols, mines, positions);
+  }, [board, status, rows, cols, mines]);
 
   // ── Init from localStorage ─────────────────────────────────────────────
 
@@ -181,6 +261,64 @@ export default function Minesweeper() {
     }
     setStreaks(sk);
   }, []);
+
+  // ── Replay from URL hash (#g=<base64>) ─────────────────────────────────
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const hash = window.location.hash;
+    if (!hash.startsWith('#g=')) return;
+    const id = hash.slice(3);
+    const decoded = decodeBoard(id);
+    if (!decoded) return;
+    const { rows: dr, cols: dc, mines: dm, minePositions } = decoded;
+
+    const matchedLevel = (Object.keys(LEVELS) as LevelName[]).find(
+      lv => lv !== 'replay' && LEVELS[lv].rows === dr && LEVELS[lv].cols === dc && LEVELS[lv].mines === dm
+    );
+    if (matchedLevel) {
+      setLevel(matchedLevel);
+    } else {
+      setReplayConfig({ rows: dr, cols: dc, mines: dm });
+      setLevel('replay');
+    }
+
+    setBoard(createBoardFromPositions(dr, dc, minePositions));
+    setStatus('playing');
+    setFlags(0);
+    setElapsed(0);
+    elapsedRef.current = 0;
+
+    const ownerKey = `ms_owner_${id}`;
+    const visitKey = `ms_visit_${id}`;
+    const ownerTs = localStorage.getItem(ownerKey);
+    const sevenDaysMs = 7 * 24 * 60 * 60 * 1000;
+    let owner = false;
+    if (ownerTs !== null) {
+      const ts = parseInt(ownerTs, 10);
+      if (!Number.isFinite(ts) || Date.now() - ts > sevenDaysMs) {
+        localStorage.removeItem(ownerKey);
+      } else {
+        owner = true;
+      }
+    }
+    const cur = parseInt(localStorage.getItem(visitKey) ?? '0', 10);
+    const next = (Number.isFinite(cur) ? cur : 0) + 1;
+    localStorage.setItem(visitKey, String(next));
+    setIsOwner(owner);
+    setVisitCount(next);
+  }, []);
+
+  // ── Visit count: poll localStorage while owner overlay is open ─────────
+
+  useEffect(() => {
+    if ((status !== 'won' && status !== 'lost') || !isOwner || !boardId) return;
+    const visitKey = `ms_visit_${boardId}`;
+    const iv = setInterval(() => {
+      setVisitCount(parseInt(localStorage.getItem(visitKey) ?? '0', 10));
+    }, 1000);
+    return () => clearInterval(iv);
+  }, [status, isOwner, boardId]);
 
   // ── Theme ──────────────────────────────────────────────────────────────
 
@@ -352,6 +490,10 @@ export default function Minesweeper() {
     setLevel(lv);
     setIsNewBest(false);
     setRevealMines(false);
+    setReplayConfig(null);
+    setIsOwner(false);
+    setVisitCount(0);
+    setGameLinkStatus('idle');
   }, [level]);
 
   // ── Touch: long-press to flag ──────────────────────────────────────────
@@ -384,6 +526,31 @@ export default function Minesweeper() {
       setTimeout(() => setShareStatus('idle'), 1500);
     }
   }, [status, elapsed, level, streaks]);
+
+  // ── Share game: copy a URL that reproduces this exact board ────────────
+
+  const handleShareGame = useCallback(async () => {
+    if (!boardId) return;
+    const url = `${window.location.origin}${window.location.pathname}#g=${boardId}`;
+    try {
+      await navigator.clipboard.writeText(url);
+      setGameLinkStatus('copied');
+      const ownerKey = `ms_owner_${boardId}`;
+      const visitKey = `ms_visit_${boardId}`;
+      if (localStorage.getItem(ownerKey) === null) {
+        localStorage.setItem(ownerKey, String(Date.now()));
+      }
+      if (localStorage.getItem(visitKey) === null) {
+        localStorage.setItem(visitKey, '0');
+      }
+      setIsOwner(true);
+      setVisitCount(parseInt(localStorage.getItem(visitKey) ?? '0', 10));
+      setTimeout(() => setGameLinkStatus('idle'), 1500);
+    } catch {
+      setGameLinkStatus('failed');
+      setTimeout(() => setGameLinkStatus('idle'), 1500);
+    }
+  }, [boardId]);
 
   // onClick: skip if the touch was a long-press (flag was already toggled)
   const handleCellClick = useCallback((r: number, c: number) => {
@@ -581,10 +748,16 @@ export default function Minesweeper() {
               <div className="ms-actions">
                 <button className="ms-btn" onClick={() => reset()}>Play Again</button>
                 <button className="ms-btn" onClick={() => setSettingsOpen(true)}>Change Difficulty</button>
+                <button className="ms-btn" onClick={handleShareGame}>
+                  {gameLinkStatus === 'copied' ? '✓ Copied!' : gameLinkStatus === 'failed' ? '✗ Copy failed' : '🔗 Share game'}
+                </button>
                 <button className="ms-btn" onClick={handleShare}>
                   {shareStatus === 'copied' ? '✓ Copied' : shareStatus === 'failed' ? '✗ Failed' : '📋 Share Result'}
                 </button>
               </div>
+              {isOwner && boardId && (
+                <p className="ms-share-counter">Loaded {visitCount} times</p>
+              )}
             </div>
           </div>
         )}
