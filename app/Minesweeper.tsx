@@ -133,28 +133,31 @@ const DARK_NUMS  = ['', '#64b5f6', '#81c784', '#ef9a9a', '#ce93d8', '#ffb74d', '
 // ── Component ──────────────────────────────────────────────────────────────
 
 export default function Minesweeper() {
-  const [level,       setLevel]       = useState<LevelName>('easy');
-  const [board,       setBoard]       = useState<Cell[][]>(() => createBoard(9, 9, 10));
-  const [status,      setStatus]      = useState<GameStatus>('idle');
-  const [flags,       setFlags]       = useState(0);
-  const [elapsed,     setElapsed]     = useState(0);
+  const [level,        setLevel]        = useState<LevelName>('easy');
+  const [board,        setBoard]        = useState<Cell[][]>(() => createBoard(9, 9, 10));
+  const [status,       setStatus]       = useState<GameStatus>('idle');
+  const [flags,        setFlags]        = useState(0);
+  const [elapsed,      setElapsed]      = useState(0);
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const [theme,       setTheme]       = useState<Theme>('system');
-  const [soundOn,     setSoundOn]     = useState(true);
-  const [isDark,      setIsDark]      = useState(false);
-  const [bestTimes,   setBestTimes]   = useState<Partial<Record<LevelName, number>>>({});
-  const [isNewBest,   setIsNewBest]   = useState(false);
-  const [cellSize,    setCellSize]    = useState(() => {
+  const [theme,        setTheme]        = useState<Theme>('system');
+  const [soundOn,      setSoundOn]      = useState(true);
+  const [isDark,       setIsDark]       = useState(false);
+  const [bestTimes,    setBestTimes]    = useState<Partial<Record<LevelName, number>>>({});
+  const [isNewBest,    setIsNewBest]    = useState(false);
+  const [streak,       setStreak]       = useState(0);
+  const [cellSize,     setCellSize]     = useState(() => {
     if (typeof window === 'undefined') return 32;
     const { cols } = LEVELS.easy;
-    const avail = window.innerWidth - 16 - 14 - (cols - 1) * 2;
-    return Math.min(32, Math.max(8, Math.floor(avail / cols)));
+    // 16px body padding + 6px frame border + 14px board border+padding
+    const avail = window.innerWidth - 36 - (cols - 1) * 2;
+    return Math.min(48, Math.max(8, Math.floor(avail / cols)));
   });
 
   const timerRef      = useRef<ReturnType<typeof setInterval> | null>(null);
   const touchTimerRef = useRef<ReturnType<typeof setTimeout>  | null>(null);
   const longPressed   = useRef(false);
   const elapsedRef    = useRef(0);
+  const settingsRef   = useRef<HTMLDivElement>(null);
 
   const { rows, cols, mines } = LEVELS[level];
 
@@ -221,14 +224,48 @@ export default function Minesweeper() {
     return () => { if (timerRef.current) clearInterval(timerRef.current); };
   }, [status]);
 
+  // ── Streak: load for current level ────────────────────────────────────
+
+  useEffect(() => {
+    const s = parseInt(localStorage.getItem(`ms_streak_${level}`) ?? '0', 10);
+    setStreak(isNaN(s) ? 0 : s);
+  }, [level]);
+
+  // ── Streak: update on win / lose ──────────────────────────────────────
+
+  useEffect(() => {
+    if (status === 'won') {
+      const cur = parseInt(localStorage.getItem(`ms_streak_${level}`) ?? '0', 10);
+      const next = (isNaN(cur) ? 0 : cur) + 1;
+      localStorage.setItem(`ms_streak_${level}`, String(next));
+      setStreak(next);
+    } else if (status === 'lost') {
+      localStorage.setItem(`ms_streak_${level}`, '0');
+      setStreak(0);
+    }
+  }, [status, level]);
+
+  // ── Settings: close on outside click ──────────────────────────────────
+
+  useEffect(() => {
+    if (!settingsOpen) return;
+    const handler = (e: MouseEvent) => {
+      if (settingsRef.current && !settingsRef.current.contains(e.target as Node)) {
+        setSettingsOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [settingsOpen]);
+
   // ── Responsive cell size ───────────────────────────────────────────────
 
   useEffect(() => {
     const compute = () => {
       const vw = window.innerWidth;
-      // 8px body-padding each side + board: 3px border×2 + 4px padding×2
-      const avail = vw - 16 - 14 - (cols - 1) * 2;
-      setCellSize(Math.min(32, Math.max(8, Math.floor(avail / cols))));
+      // 16px body-padding + 6px frame border + 14px board border+padding
+      const avail = vw - 36 - (cols - 1) * 2;
+      setCellSize(Math.min(48, Math.max(8, Math.floor(avail / cols))));
     };
     compute();
     window.addEventListener('resize', compute);
@@ -374,150 +411,159 @@ export default function Minesweeper() {
 
   return (
     <div className="ms-wrap">
+      <div className="ms-frame">
 
-      {/* ── Top bar ── */}
-      <div className="ms-bar">
-        <div className="ms-stats">
-          <span className="ms-stat" title="Flags placed / Total mines">🚩 {flags}/{mines}</span>
-          <span className="ms-stat" title="Elapsed time">⏱ {fmtTime(elapsed)}</span>
-          {best !== undefined && (
-            <span className="ms-stat ms-stat-best" title={`Best time on ${level}`}>🏆 {fmtTime(best)}</span>
-          )}
-        </div>
-        <div className="ms-bar-actions">
-          <button
-            className="ms-btn ms-icon-btn"
-            onClick={() => reset()}
-            title="New game"
-            aria-label="New game"
-          >↻</button>
-          <button
-            className="ms-btn ms-icon-btn"
-            onClick={() => setSettingsOpen(o => !o)}
-            title="Settings"
-            aria-label="Settings"
-            aria-expanded={settingsOpen}
-          >⚙</button>
-          <button
-            className="ms-btn ms-icon-btn ms-premium-btn"
-            onClick={() => {}}
-            title="Premium"
-            aria-label="Premium"
-          >💎</button>
-        </div>
-      </div>
-
-      {/* ── Settings panel ── */}
-      {settingsOpen && (
-        <div className="ms-settings" role="region" aria-label="Settings">
-          <div className="ms-settings-row">
-            <span className="ms-settings-lbl">Difficulty</span>
-            <div className="ms-btn-grp">
-              {(Object.keys(LEVELS) as LevelName[]).map(lv => (
-                <button
-                  key={lv}
-                  className={`ms-btn${lv === level ? ' ms-btn-sel' : ''}`}
-                  onClick={() => { reset(lv); setSettingsOpen(false); }}
-                >
-                  {lv[0].toUpperCase() + lv.slice(1)}
-                </button>
-              ))}
-            </div>
+        {/* ── Top bar ── */}
+        <div className="ms-bar">
+          <div className="ms-stats">
+            <span className="ms-stat" title="Flags placed / Total mines">🚩 {flags}/{mines}</span>
+            <span className="ms-stat" title="Elapsed time">⏱ {fmtTime(elapsed)}</span>
+            {best !== undefined && (
+              <span className="ms-stat ms-stat-best" title={`Best time on ${level}`}>🏆 {fmtTime(best)}</span>
+            )}
           </div>
-          <div className="ms-settings-row">
-            <span className="ms-settings-lbl">Theme</span>
-            <div className="ms-btn-grp">
-              {(['system', 'light', 'dark'] as Theme[]).map(t => (
-                <button
-                  key={t}
-                  className={`ms-btn${t === theme ? ' ms-btn-sel' : ''}`}
-                  onClick={() => setTheme(t)}
-                >
-                  {t === 'system' ? '💻 System' : t === 'light' ? '☀ Light' : '🌙 Dark'}
-                </button>
-              ))}
-            </div>
-          </div>
-          <div className="ms-settings-row">
-            <span className="ms-settings-lbl">Sound</span>
+          <div className="ms-bar-actions">
             <button
-              className={`ms-btn${soundOn ? ' ms-btn-sel' : ''}`}
-              onClick={() => setSoundOn(s => !s)}
-            >
-              {soundOn ? '🔊 On' : '🔇 Off'}
-            </button>
+              className="ms-btn ms-icon-btn"
+              onClick={() => reset()}
+              title="New game"
+              aria-label="New game"
+            >↻</button>
+            <div className="ms-settings-gear-wrapper" ref={settingsRef}>
+              <button
+                className="ms-btn ms-icon-btn"
+                onClick={() => setSettingsOpen(o => !o)}
+                title="Settings"
+                aria-label="Settings"
+                aria-expanded={settingsOpen}
+              >⚙</button>
+              {settingsOpen && (
+                <div className="ms-settings-dropdown" role="region" aria-label="Settings">
+                  <div className="ms-settings-row">
+                    <span className="ms-settings-lbl">Difficulty</span>
+                    <div className="ms-btn-grp">
+                      {(Object.keys(LEVELS) as LevelName[]).map(lv => (
+                        <button
+                          key={lv}
+                          className={`ms-btn${lv === level ? ' ms-btn-sel' : ''}`}
+                          onClick={() => { reset(lv); setSettingsOpen(false); }}
+                        >
+                          {lv[0].toUpperCase() + lv.slice(1)}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  <div className="ms-settings-row">
+                    <span className="ms-settings-lbl">Theme</span>
+                    <div className="ms-btn-grp">
+                      {(['system', 'light', 'dark'] as Theme[]).map(t => (
+                        <button
+                          key={t}
+                          className={`ms-btn${t === theme ? ' ms-btn-sel' : ''}`}
+                          onClick={() => setTheme(t)}
+                        >
+                          {t === 'system' ? '💻 System' : t === 'light' ? '☀ Light' : '🌙 Dark'}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  <div className="ms-settings-row">
+                    <span className="ms-settings-lbl">Sound</span>
+                    <button
+                      className={`ms-btn${soundOn ? ' ms-btn-sel' : ''}`}
+                      onClick={() => setSoundOn(s => !s)}
+                    >
+                      {soundOn ? '🔊 On' : '🔇 Off'}
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+            <button
+              className="ms-btn ms-icon-btn ms-premium-btn"
+              onClick={() => {}}
+              title="Premium"
+              aria-label="Premium"
+            >💎</button>
           </div>
         </div>
-      )}
 
-      {/* ── Board ── */}
-      <div className="ms-board-wrap">
-        <div
-          className="ms-board"
-          style={{ gridTemplateColumns: `repeat(${cols}, ${cellSize}px)` }}
-          onTouchMove={cancelLongPress}
-        >
-          {board.map((row, r) =>
-            row.map((cell, c) => (
-              <button
-                key={`${r}-${c}`}
-                className={`ms-cell ${cell.revealed ? (cell.mine ? 'ms-mine' : 'ms-open') : 'ms-hidden'}`}
-                style={{
-                  width: cellSize,
-                  height: cellSize,
-                  fontSize,
-                  color: cell.mine && cell.revealed ? '#fff' : numColors[cell.count],
-                }}
-                onClick={() => handleCellClick(r, c)}
-                onDoubleClick={() => handleChord(r, c)}
-                onContextMenu={e => handleContextMenu(e, r, c)}
-                onTouchStart={() => handleTouchStart(r, c)}
-                onTouchEnd={cancelLongPress}
-                aria-label={
-                  cell.revealed
-                    ? `${r},${c} ${cell.mine ? 'mine' : cell.count || 'empty'}`
-                    : cell.flagged
-                    ? `${r},${c} flagged`
-                    : `${r},${c} hidden`
-                }
-              >
-                {cell.revealed
-                  ? cell.mine ? '💣' : (cell.count || '')
-                  : cell.flagged ? '🚩' : ''}
-              </button>
-            ))
+        {/* ── Board ── */}
+        <div className="ms-board-wrap">
+          <div
+            className="ms-board"
+            style={{ gridTemplateColumns: `repeat(${cols}, ${cellSize}px)` }}
+            onTouchMove={cancelLongPress}
+          >
+            {board.map((row, r) =>
+              row.map((cell, c) => (
+                <button
+                  key={`${r}-${c}`}
+                  className={`ms-cell ${cell.revealed ? (cell.mine ? 'ms-mine' : 'ms-open') : 'ms-hidden'}`}
+                  style={{
+                    width: cellSize,
+                    height: cellSize,
+                    fontSize,
+                    color: cell.mine && cell.revealed ? '#fff' : numColors[cell.count],
+                  }}
+                  onClick={() => handleCellClick(r, c)}
+                  onDoubleClick={() => handleChord(r, c)}
+                  onContextMenu={e => handleContextMenu(e, r, c)}
+                  onTouchStart={() => handleTouchStart(r, c)}
+                  onTouchEnd={cancelLongPress}
+                  aria-label={
+                    cell.revealed
+                      ? `${r},${c} ${cell.mine ? 'mine' : cell.count || 'empty'}`
+                      : cell.flagged
+                      ? `${r},${c} flagged`
+                      : `${r},${c} hidden`
+                  }
+                >
+                  {cell.revealed
+                    ? cell.mine ? '💣' : (cell.count || '')
+                    : cell.flagged ? '🚩' : ''}
+                </button>
+              ))
+            )}
+          </div>
+
+          {/* ── Game-over overlay ── */}
+          {(status === 'won' || status === 'lost') && (
+            <div
+              className="ms-overlay"
+              role="dialog"
+              aria-modal="true"
+              aria-label={status === 'won' ? 'You won' : 'Game over'}
+            >
+              <div className="ms-overlay-card">
+                <p className="ms-overlay-title">
+                  {status === 'won' ? '🎉 You Won!' : '💥 Game Over'}
+                </p>
+                <div className="ms-stats-grid">
+                  <span className="ms-stat-label">Time</span>
+                  <span className="ms-stat-value">{fmtTime(elapsed)}</span>
+                  <span className="ms-stat-label">Difficulty</span>
+                  <span className="ms-stat-value">{level[0].toUpperCase() + level.slice(1)}</span>
+                  <span className="ms-stat-label">Streak</span>
+                  <span className="ms-stat-value">{streak}</span>
+                  <span className="ms-stat-label">Hint used</span>
+                  <span className="ms-stat-value">Off</span>
+                  <span className="ms-stat-label">Personal best</span>
+                  <span className="ms-stat-value">
+                    {status === 'won' && isNewBest
+                      ? <span className="ms-new-best">🏆 New best!</span>
+                      : best !== undefined ? fmtTime(best) : '—'}
+                  </span>
+                </div>
+                <button className="ms-btn ms-play-again" onClick={() => reset()}>
+                  Play Again
+                </button>
+              </div>
+            </div>
           )}
         </div>
 
-        {/* ── Game-over overlay ── */}
-        {(status === 'won' || status === 'lost') && (
-          <div
-            className="ms-overlay"
-            role="dialog"
-            aria-modal="true"
-            aria-label={status === 'won' ? 'You won' : 'Game over'}
-          >
-            <div className="ms-overlay-card">
-              <p className="ms-overlay-title">
-                {status === 'won' ? '🎉 You Won!' : '💥 Game Over'}
-              </p>
-              <div className="ms-overlay-details">
-                <span>{level[0].toUpperCase() + level.slice(1)}</span>
-                <span>Time: {fmtTime(elapsed)}</span>
-                {status === 'won' && isNewBest && (
-                  <span className="ms-new-best">🏆 New best!</span>
-                )}
-              </div>
-              {/* Ad placeholder — future monetization surface */}
-              <div className="ms-ad-slot" aria-hidden="true" />
-              <button className="ms-btn ms-play-again" onClick={() => reset()}>
-                Play Again
-              </button>
-            </div>
-          </div>
-        )}
       </div>
-
     </div>
   );
 }

@@ -39,7 +39,6 @@ a {
   --ms-btn-active-bg: #a8a8a8;
   --ms-overlay-bg:    rgba(192, 192, 192, 0.97);
   --ms-card-bg:       #c0c0c0;
-  --ms-ad-bg:         #d0d0d0;
   --ms-settings-bg:   #c8c8c8;
   --ms-new-best:      #b35c00;
   --ms-premium-color: #7b1fa2;
@@ -61,7 +60,6 @@ a {
     --ms-btn-active-bg: #555555;
     --ms-overlay-bg:    rgba(28, 28, 28, 0.97);
     --ms-card-bg:       #2a2a2a;
-    --ms-ad-bg:         #333333;
     --ms-settings-bg:   #252525;
     --ms-new-best:      #f57f17;
     --ms-premium-color: #ce93d8;
@@ -83,7 +81,6 @@ a {
   --ms-btn-active-bg: #555555;
   --ms-overlay-bg:    rgba(28, 28, 28, 0.97);
   --ms-card-bg:       #2a2a2a;
-  --ms-ad-bg:         #333333;
   --ms-settings-bg:   #252525;
   --ms-new-best:      #f57f17;
   --ms-premium-color: #ce93d8;
@@ -108,26 +105,34 @@ body {
 .ms-wrap {
   display: flex;
   flex-direction: column;
-  align-items: stretch;   /* children fill wrapper width */
-  width: fit-content;
+  align-items: center;
+  width: 100%;
   max-width: calc(100vw - 16px);
-  gap: 0;
 }
 
-/* ── Top bar ────────────────────────────────────────────────────────────── */
+/* ── Outer game frame (Windows-style single raised border) ──────────────── */
+.ms-frame {
+  display: flex;
+  flex-direction: column;
+  width: min(100vw - 16px, 1100px);
+  max-width: min(100vw - 16px, 1100px);
+  border: 3px solid;
+  border-top-color: var(--ms-border-hi);
+  border-left-color: var(--ms-border-hi);
+  border-right-color: var(--ms-border-lo);
+  border-bottom-color: var(--ms-border-lo);
+  background: var(--ms-page-bg);
+}
+
+/* ── Top bar (inside frame, no own outer border) ────────────────────────── */
 .ms-bar {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 6px;
   background: var(--ms-page-bg);
-  border: 3px solid;
-  border-top-color: var(--ms-border-hi);
-  border-left-color: var(--ms-border-hi);
-  border-right-color: var(--ms-border-lo);
-  border-bottom-color: var(--ms-border-lo);
+  border-bottom: 2px solid var(--ms-border-lo);
   padding: 4px 6px;
-  margin-bottom: 4px;
   min-height: 44px;
 }
 
@@ -219,8 +224,16 @@ body {
   flex-wrap: wrap;
 }
 
-/* ── Settings panel ─────────────────────────────────────────────────────── */
-.ms-settings {
+/* ── Settings gear wrapper + dropdown ───────────────────────────────────── */
+.ms-settings-gear-wrapper {
+  position: relative;
+}
+
+.ms-settings-dropdown {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  z-index: 20;
   background: var(--ms-settings-bg);
   border: 3px solid;
   border-top-color: var(--ms-border-hi);
@@ -228,10 +241,10 @@ body {
   border-right-color: var(--ms-border-lo);
   border-bottom-color: var(--ms-border-lo);
   padding: 8px 10px;
-  margin-bottom: 4px;
   display: flex;
   flex-direction: column;
   gap: 8px;
+  min-width: 220px;
 }
 
 .ms-settings-row {
@@ -251,7 +264,9 @@ body {
 /* ── Board wrapper (relative, hosts overlay) ────────────────────────────── */
 .ms-board-wrap {
   position: relative;
-  display: inline-block;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
   line-height: 0;
 }
 
@@ -318,15 +333,15 @@ body {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 10px;
+  gap: 12px;
   background: var(--ms-card-bg);
   border: 3px solid;
   border-top-color: var(--ms-border-hi);
   border-left-color: var(--ms-border-hi);
   border-right-color: var(--ms-border-lo);
   border-bottom-color: var(--ms-border-lo);
-  padding: 16px 20px;
-  min-width: min(200px, 90%);
+  padding: 16px 24px;
+  min-width: min(280px, 90%);
   max-width: 90%;
 }
 
@@ -337,29 +352,32 @@ body {
   color: var(--ms-text);
 }
 
-.ms-overlay-details {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 3px;
+/* ── Stats grid inside modal ────────────────────────────────────────────── */
+.ms-stats-grid {
+  display: grid;
+  grid-template-columns: auto auto;
+  gap: 4px 18px;
   font-size: 13px;
+  width: 100%;
+}
+
+.ms-stat-label {
   color: var(--ms-text-muted);
+  text-align: right;
+  white-space: nowrap;
+  align-self: center;
+}
+
+.ms-stat-value {
+  color: var(--ms-text);
+  font-weight: 600;
+  white-space: nowrap;
+  align-self: center;
 }
 
 .ms-new-best {
   color: var(--ms-new-best);
   font-weight: 700;
-}
-
-/* ad placeholder — future monetization surface */
-.ms-ad-slot {
-  width: 100%;
-  min-width: 160px;
-  height: 56px;
-  background: var(--ms-ad-bg);
-  border: 1px dashed var(--ms-border-mid);
-  opacity: 0.5;
-  border-radius: 2px;
 }
 
 .ms-play-again {
