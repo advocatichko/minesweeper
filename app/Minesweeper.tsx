@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback, useEffect, useRef } from 'react';
+import { useState, useCallback, useEffect, useRef, useMemo } from 'react';
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -144,6 +144,9 @@ export default function Minesweeper() {
   const [isDark,      setIsDark]      = useState(false);
   const [bestTimes,   setBestTimes]   = useState<Partial<Record<LevelName, number>>>({});
   const [isNewBest,   setIsNewBest]   = useState(false);
+  const [streaks,     setStreaks]     = useState<Partial<Record<LevelName, number>>>({});
+  const [revealMines, setRevealMines] = useState(false);
+  const [shareStatus, setShareStatus] = useState<'idle' | 'copied' | 'failed'>('idle');
   const [cellSize,    setCellSize]    = useState(() => {
     if (typeof window === 'undefined') return 32;
     const { cols } = LEVELS.easy;
@@ -171,6 +174,12 @@ export default function Minesweeper() {
       if (v !== null) bt[lv] = v;
     }
     setBestTimes(bt);
+    const sk: Partial<Record<LevelName, number>> = {};
+    for (const lv of Object.keys(LEVELS) as LevelName[]) {
+      const v = localStorage.getItem(`ms_streak_${lv}`);
+      if (v !== null) sk[lv] = parseInt(v, 10);
+    }
+    setStreaks(sk);
   }, []);
 
   // ── Theme ──────────────────────────────────────────────────────────────
@@ -242,6 +251,11 @@ export default function Minesweeper() {
     const isNew = saveBest(lv, t);
     setIsNewBest(isNew);
     if (isNew) setBestTimes(prev => ({ ...prev, [lv]: t }));
+    setStreaks(prev => {
+      const next = (prev[lv] ?? 0) + 1;
+      localStorage.setItem(`ms_streak_${lv}`, String(next));
+      return { ...prev, [lv]: next };
+    });
   }, []);
 
   // ── Game logic ─────────────────────────────────────────────────────────
@@ -267,6 +281,7 @@ export default function Minesweeper() {
       if (b[r][c].mine) {
         b.forEach(row => row.forEach(cl => { if (cl.mine) cl.revealed = true; }));
         setStatus('lost');
+        setStreaks(prev => { localStorage.setItem(`ms_streak_${level}`, '0'); return { ...prev, [level]: 0 }; });
         if (soundOn) SFX.lose();
         return b;
       }
@@ -308,6 +323,7 @@ export default function Minesweeper() {
       b.forEach(row => row.forEach(cl => { if (cl.mine) cl.revealed = true; }));
       setBoard(b);
       setStatus('lost');
+      setStreaks(prev => { localStorage.setItem(`ms_streak_${level}`, '0'); return { ...prev, [level]: 0 }; });
       if (soundOn) SFX.lose();
       return;
     }
@@ -335,6 +351,7 @@ export default function Minesweeper() {
     setFlags(0);
     setLevel(lv);
     setIsNewBest(false);
+    setRevealMines(false);
   }, [level]);
 
   // ── Touch: long-press to flag ──────────────────────────────────────────
@@ -354,6 +371,20 @@ export default function Minesweeper() {
     if (touchTimerRef.current) { clearTimeout(touchTimerRef.current); touchTimerRef.current = null; }
   }, []);
 
+  const handleShare = useCallback(async () => {
+    const cur = streaks[level] ?? 0;
+    const emoji = status === 'won' ? '✅' : '❌';
+    const txt = `💣 ${fmtTime(elapsed)} ${emoji} ${level} streak ${cur}`;
+    try {
+      await navigator.clipboard.writeText(txt);
+      setShareStatus('copied');
+      setTimeout(() => setShareStatus('idle'), 1500);
+    } catch {
+      setShareStatus('failed');
+      setTimeout(() => setShareStatus('idle'), 1500);
+    }
+  }, [status, elapsed, level, streaks]);
+
   // onClick: skip if the touch was a long-press (flag was already toggled)
   const handleCellClick = useCallback((r: number, c: number) => {
     if (longPressed.current) { longPressed.current = false; return; }
@@ -371,6 +402,15 @@ export default function Minesweeper() {
   const numColors = isDark ? DARK_NUMS : LIGHT_NUMS;
   const best = bestTimes[level];
   const fontSize = Math.max(7, Math.floor(cellSize * 0.56));
+  const safeCells = rows * cols - mines;
+  const cellsRevealed = useMemo(() => {
+    if (status !== 'won' && status !== 'lost') return 0;
+    let n = 0;
+    for (const row of board) for (const c of row) if (c.revealed && !c.mine) n++;
+    return n;
+  }, [board, status]);
+  const accuracy = safeCells > 0 ? Math.round((cellsRevealed / safeCells) * 100) : 100;
+  const streak = streaks[level] ?? 0;
 
   return (
     <div className="ms-wrap">
@@ -461,7 +501,7 @@ export default function Minesweeper() {
             row.map((cell, c) => (
               <button
                 key={`${r}-${c}`}
-                className={`ms-cell ${cell.revealed ? (cell.mine ? 'ms-mine' : 'ms-open') : 'ms-hidden'}`}
+                className={`ms-cell ${cell.revealed ? (cell.mine ? `ms-mine${revealMines ? ' ms-mine-emphasis' : ''}` : 'ms-open') : 'ms-hidden'}`}
                 style={{
                   width: cellSize,
                   height: cellSize,
@@ -501,18 +541,50 @@ export default function Minesweeper() {
               <p className="ms-overlay-title">
                 {status === 'won' ? '🎉 You Won!' : '💥 Game Over'}
               </p>
-              <div className="ms-overlay-details">
-                <span>{level[0].toUpperCase() + level.slice(1)}</span>
-                <span>Time: {fmtTime(elapsed)}</span>
-                {status === 'won' && isNewBest && (
-                  <span className="ms-new-best">🏆 New best!</span>
-                )}
+              <span className="ms-difficulty-badge">{level}</span>
+              <div className="ms-stats-grid">
+                <div className="ms-stat-tile">
+                  <span className="ms-stat-tile-label">Time</span>
+                  <span className="ms-stat-tile-value">{fmtTime(elapsed)}</span>
+                </div>
+                <div className="ms-stat-tile">
+                  <span className="ms-stat-tile-label">Mines</span>
+                  <span className="ms-stat-tile-value">💣 {mines}</span>
+                </div>
+                <div className="ms-stat-tile">
+                  <span className="ms-stat-tile-label">Revealed</span>
+                  <span className="ms-stat-tile-value">{cellsRevealed}</span>
+                </div>
+                <div className="ms-stat-tile">
+                  <span className="ms-stat-tile-label">Accuracy</span>
+                  <span className="ms-stat-tile-value">{accuracy}%</span>
+                </div>
+                <div className="ms-stat-tile">
+                  <span className="ms-stat-tile-label">Streak</span>
+                  <span className="ms-stat-tile-value">{streak}</span>
+                </div>
+                <div className="ms-stat-tile">
+                  <span className="ms-stat-tile-label">Best</span>
+                  <span className="ms-stat-tile-value">
+                    {isNewBest ? '🏆 New!' : best !== undefined ? `🏆 ${fmtTime(best)}` : '—'}
+                  </span>
+                </div>
               </div>
-              {/* Ad placeholder — future monetization surface */}
-              <div className="ms-ad-slot" aria-hidden="true" />
-              <button className="ms-btn ms-play-again" onClick={() => reset()}>
-                Play Again
-              </button>
+              {status === 'lost' && (
+                <button
+                  className={`ms-reveal-mines${revealMines ? ' ms-reveal-mines-active' : ''}`}
+                  onClick={() => setRevealMines(r => !r)}
+                >
+                  {revealMines ? '🔍 Hiding mines' : '🔍 Where are the mines?'}
+                </button>
+              )}
+              <div className="ms-actions">
+                <button className="ms-btn" onClick={() => reset()}>Play Again</button>
+                <button className="ms-btn" onClick={() => setSettingsOpen(true)}>Change Difficulty</button>
+                <button className="ms-btn" onClick={handleShare}>
+                  {shareStatus === 'copied' ? '✓ Copied' : shareStatus === 'failed' ? '✗ Failed' : '📋 Share Result'}
+                </button>
+              </div>
             </div>
           </div>
         )}
