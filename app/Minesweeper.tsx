@@ -490,32 +490,68 @@ export default function Minesweeper() {
         </div>
 
         {/* ── Game-over overlay ── */}
-        {(status === 'won' || status === 'lost') && (
-          <div
-            className="ms-overlay"
-            role="dialog"
-            aria-modal="true"
-            aria-label={status === 'won' ? 'You won' : 'Game over'}
-          >
-            <div className="ms-overlay-card">
-              <p className="ms-overlay-title">
-                {status === 'won' ? '🎉 You Won!' : '💥 Game Over'}
-              </p>
-              <div className="ms-overlay-details">
-                <span>{level[0].toUpperCase() + level.slice(1)}</span>
-                <span>Time: {fmtTime(elapsed)}</span>
-                {status === 'won' && isNewBest && (
-                  <span className="ms-new-best">🏆 New best!</span>
-                )}
+        {(status === 'won' || status === 'lost') && (() => {
+          // Derived stats — bugfix-only, no new state.
+          let revealedCount = 0;
+          let totalSafe = 0;
+          for (const row of board) for (const c of row) {
+            if (!c.mine) totalSafe++;
+            if (c.revealed && !c.mine) revealedCount++;
+          }
+          const accuracyPct =
+            totalSafe === 0
+              ? 0
+              : status === 'won'
+                ? 100
+                : Math.round((revealedCount / totalSafe) * 100);
+          const diffLabel =
+            level === 'easy' ? 'EASY' :
+            level === 'medium' ? 'MED' :
+            'HARD';
+          return (
+            <div
+              className="ms-overlay"
+              role="dialog"
+              aria-modal="true"
+              aria-label={status === 'won' ? 'You won' : 'Game over'}
+            >
+              <div className="ms-overlay-card">
+                <p className="ms-overlay-title">
+                  {status === 'won' ? '🎉 You Won!' : '💥 Game Over'}
+                </p>
+                <div className="ms-overlay-pill" aria-label={`Difficulty: ${level}`}>
+                  {diffLabel}
+                  {status === 'won' && isNewBest && (
+                    <span className="ms-new-best">🏆 New best!</span>
+                  )}
+                </div>
+                <div className="ms-stats-grid">
+                  <div className="ms-stat-tile">
+                    <span className="ms-stat-tile-label">Mines</span>
+                    <span className="ms-stat-tile-value">{mines}</span>
+                  </div>
+                  <div className="ms-stat-tile">
+                    <span className="ms-stat-tile-label">Time</span>
+                    <span className="ms-stat-tile-value">{fmtTime(elapsed)}</span>
+                  </div>
+                  <div className="ms-stat-tile">
+                    <span className="ms-stat-tile-label">Revealed</span>
+                    <span className="ms-stat-tile-value">{revealedCount}/{totalSafe}</span>
+                  </div>
+                  <div className="ms-stat-tile">
+                    <span className="ms-stat-tile-label">Accuracy</span>
+                    <span className="ms-stat-tile-value">{accuracyPct}%</span>
+                  </div>
+                </div>
+                {/* Ad placeholder — future monetization surface */}
+                <div className="ms-ad-slot" aria-hidden="true" />
+                <button className="ms-btn ms-play-again" onClick={() => reset()}>
+                  Play Again
+                </button>
               </div>
-              {/* Ad placeholder — future monetization surface */}
-              <div className="ms-ad-slot" aria-hidden="true" />
-              <button className="ms-btn ms-play-again" onClick={() => reset()}>
-                Play Again
-              </button>
             </div>
-          </div>
-        )}
+          );
+        })()}
       </div>
 
     </div>
