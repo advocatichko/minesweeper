@@ -457,3 +457,49 @@ body {
   min-height: 34px;
   min-width: 110px;
 }
+
+/* ── Daily Challenge button ─────────────────────────────────────────────── */
+.ms-daily-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 15px;
+  padding: 3px 7px;
+  min-width: 32px;
+  min-height: 32px;
+}
+
+/* hide text label on very narrow viewports, icon-only */
+@media (max-width: 479px) {
+  .ms-daily-label {
+    display: none;
+  }
+}
+
+/* ── Daily streak stat ──────────────────────────────────────────────────── */
+.ms-stat-daily {
+  font-family: var(--font-geist-mono), "Courier New", monospace;
+  font-size: 13px;
+  color: var(--ms-text);
+  white-space: nowrap;
+}
+
+.ms-stat-daily:hover {
+  opacity: 0.85;
+}
+
+/* ── Overlay share row ──────────────────────────────────────────────────── */
+.ms-overlay-share {
+  display: flex;
+  flex-direction: row;
+  gap: 8px;
+  width: 100%;
+  justify-content: center;
+}
+
+@media (max-width: 479px) {
+  .ms-overlay-share {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}

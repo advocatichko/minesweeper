@@ -48,6 +48,56 @@ function createBoard(rows: number, cols: number, mines: number): Cell[][] {
   return b;
 }
 
+// ── Seeded board helpers ───────────────────────────────────────────────────
+
+function hashDate(s: string): number {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < s.length; i++) {
+    h ^= s.charCodeAt(i);
+    h = Math.imul(h, 0x01000193);
+  }
+  return h >>> 0;
+}
+
+function mulberry32(a: number) {
+  return function () {
+    a |= 0; a = a + 0x6D2B79F5 | 0;
+    let t = Math.imul(a ^ a >>> 15, 1 | a);
+    t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+    return ((t ^ t >>> 14) >>> 0) / 4294967296;
+  };
+}
+
+export function createBoardSeeded(rows: number, cols: number, mines: number, seed: number): Cell[][] {
+  const rand = mulberry32(seed);
+  const indices = Array.from({ length: rows * cols }, (_, i) => i);
+  for (let i = indices.length - 1; i > 0; i--) {
+    const j = Math.floor(rand() * (i + 1));
+    [indices[i], indices[j]] = [indices[j], indices[i]];
+  }
+  const mineSet = new Set(indices.slice(0, mines));
+  const b: Cell[][] = Array.from({ length: rows }, (_, r) =>
+    Array.from({ length: cols }, (_, c) => ({
+      mine: mineSet.has(r * cols + c),
+      revealed: false,
+      flagged: false,
+      count: 0,
+    }))
+  );
+  for (let r = 0; r < rows; r++)
+    for (let c = 0; c < cols; c++) {
+      if (b[r][c].mine) continue;
+      let n = 0;
+      for (let dr = -1; dr <= 1; dr++)
+        for (let dc = -1; dc <= 1; dc++) {
+          const nr = r + dr, nc = c + dc;
+          if (nr >= 0 && nr < rows && nc >= 0 && nc < cols && b[nr][nc].mine) n++;
+        }
+      b[r][c].count = n;
+    }
+  return b;
+}
+
 function revealCascade(board: Cell[][], r: number, c: number): void {
   const rows = board.length, cols = board[0].length;
   const stack: [number, number][] = [[r, c]];
@@ -145,6 +195,9 @@ export default function Minesweeper() {
   const [isDark,      setIsDark]      = useState(false);
   const [bestTimes,   setBestTimes]   = useState<Partial<Record<LevelName, number>>>({});
   const [isNewBest,   setIsNewBest]   = useState(false);
+  const [isDaily,     setIsDaily]     = useState(false);
+  const [streak,      setStreak]      = useState(0);
+  const [shareCopied, setShareCopied] = useState(false);
   const [cellSize,    setCellSize]    = useState(() => {
     if (typeof window === 'undefined') return 32;
     const { cols } = LEVELS.easy;
@@ -152,10 +205,11 @@ export default function Minesweeper() {
     return Math.min(32, Math.max(8, Math.floor(avail / cols)));
   });
 
-  const timerRef      = useRef<ReturnType<typeof setInterval> | null>(null);
-  const touchTimerRef = useRef<ReturnType<typeof setTimeout>  | null>(null);
-  const longPressed   = useRef(false);
-  const elapsedRef    = useRef(0);
+  const timerRef         = useRef<ReturnType<typeof setInterval> | null>(null);
+  const touchTimerRef    = useRef<ReturnType<typeof setTimeout>  | null>(null);
+  const longPressed      = useRef(false);
+  const elapsedRef       = useRef(0);
+  const streakUpdatedRef = useRef(false);
 
   const { rows, cols, mines } = LEVELS[level];
 
@@ -172,6 +226,8 @@ export default function Minesweeper() {
       if (v !== null) bt[lv] = v;
     }
     setBestTimes(bt);
+    const str = localStorage.getItem('ms_daily_streak');
+    if (str !== null) setStreak(parseInt(str, 10));
   }, []);
 
   // ── Theme ──────────────────────────────────────────────────────────────
@@ -244,6 +300,62 @@ export default function Minesweeper() {
     setIsNewBest(isNew);
     if (isNew) setBestTimes(prev => ({ ...prev, [lv]: t }));
     track('game_win', { difficulty: lv, time_seconds: t, ts: Date.now() });
+  }, []);
+
+  // ── Daily streak ───────────────────────────────────────────────────────
+
+  useEffect(() => {
+    if (status === 'idle') { streakUpdatedRef.current = false; return; }
+    if (status !== 'won' || !isDaily) return;
+    if (streakUpdatedRef.current) return;
+    streakUpdatedRef.current = true;
+    const todayISO = new Date().toISOString().slice(0, 10);
+    const lastPlayed = localStorage.getItem('ms_daily_last_played');
+    if (lastPlayed === todayISO) return;
+    const yesterday = new Date();
+    yesterday.setDate(yesterday.getDate() - 1);
+    const yesterdayISO = yesterday.toISOString().slice(0, 10);
+    const cur = parseInt(localStorage.getItem('ms_daily_streak') || '0', 10);
+    const newStreak = lastPlayed === yesterdayISO ? cur + 1 : 1;
+    localStorage.setItem('ms_daily_streak', String(newStreak));
+    localStorage.setItem('ms_daily_last_played', todayISO);
+    setStreak(newStreak);
+  }, [status, isDaily]);
+
+  // ── Start daily challenge ──────────────────────────────────────────────
+
+  const startDaily = useCallback(() => {
+    if (touchTimerRef.current) { clearTimeout(touchTimerRef.current); touchTimerRef.current = null; }
+    longPressed.current = false;
+    const todayISO = new Date().toISOString().slice(0, 10);
+    const seed = hashDate(todayISO);
+    const { rows: r, cols: c, mines: m } = LEVELS.hard;
+    setBoard(createBoardSeeded(r, c, m, seed));
+    setStatus('idle');
+    setFlags(0);
+    setLevel('hard');
+    setIsDaily(true);
+    setIsNewBest(false);
+    setShareCopied(false);
+    track('daily_start', { date: todayISO, ts: Date.now() });
+  }, []);
+
+  // ── Share daily result ─────────────────────────────────────────────────
+
+  const handleShare = useCallback(async (gameStatus: GameStatus, mineCount: number, elapsedSecs: number, currentStreak: number) => {
+    const winMark = gameStatus === 'won' ? '✅' : '❌';
+    const summary = `💣 ${mineCount} ⏱ ${elapsedSecs}s ${winMark} HARD streak ${currentStreak}`;
+    try {
+      if (navigator.share) {
+        await navigator.share({ text: summary });
+        return;
+      }
+    } catch { /* fall through to clipboard */ }
+    try {
+      await navigator.clipboard.writeText(summary);
+      setShareCopied(true);
+      setTimeout(() => setShareCopied(false), 1500);
+    } catch { /* silent */ }
   }, []);
 
   // ── Game logic ─────────────────────────────────────────────────────────
@@ -339,6 +451,7 @@ export default function Minesweeper() {
     setFlags(0);
     setLevel(lv);
     setIsNewBest(false);
+    setShareCopied(false);
     track('game_start', { difficulty: lv, ts: Date.now() });
   }, [level]);
 
@@ -388,8 +501,20 @@ export default function Minesweeper() {
           {best !== undefined && (
             <span className="ms-stat ms-stat-best" title={`Best time on ${level}`}>🏆 {fmtTime(best)}</span>
           )}
+          {isDaily && streak > 0 && (
+            <span className="ms-stat ms-stat-daily" title="Daily streak">🔥 {streak}</span>
+          )}
         </div>
         <div className="ms-bar-actions">
+          <button
+            className="ms-btn ms-daily-btn"
+            onClick={startDaily}
+            title="Daily Challenge"
+            aria-label="Daily Challenge"
+          >
+            <span>📅</span>
+            <span className="ms-daily-label">Daily</span>
+          </button>
           <button
             className="ms-btn ms-icon-btn"
             onClick={() => reset()}
@@ -422,7 +547,7 @@ export default function Minesweeper() {
                 <button
                   key={lv}
                   className={`ms-btn${lv === level ? ' ms-btn-sel' : ''}`}
-                  onClick={() => { reset(lv); setSettingsOpen(false); }}
+                  onClick={() => { reset(lv); setIsDaily(false); setSettingsOpen(false); }}
                 >
                   {lv[0].toUpperCase() + lv.slice(1)}
                 </button>
@@ -550,9 +675,19 @@ export default function Minesweeper() {
                 </div>
                 {/* Ad placeholder — future monetization surface */}
                 <div className="ms-ad-slot" aria-hidden="true" />
-                <button className="ms-btn ms-play-again" onClick={() => reset()}>
-                  Play Again
-                </button>
+                <div className="ms-overlay-share">
+                  <button className="ms-btn ms-play-again" onClick={() => { reset(); setIsDaily(false); }}>
+                    Play Again
+                  </button>
+                  {isDaily && (
+                    <button
+                      className="ms-btn ms-play-again"
+                      onClick={() => handleShare(status, mines, elapsed, streak)}
+                    >
+                      {shareCopied ? '✓ Copied' : '📤 Share'}
+                    </button>
+                  )}
+                </div>
               </div>
             </div>
           );
