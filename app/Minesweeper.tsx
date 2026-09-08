@@ -531,19 +531,19 @@ export default function Minesweeper() {
                   )}
                 </div>
                 <div className="ms-stats-grid">
-                  <div className="ms-stat-tile">
+                  <div className="ms-stat-tile" data-qa-mines="true">
                     <span className="ms-stat-tile-label">Mines</span>
                     <span className="ms-stat-tile-value">{mines}</span>
                   </div>
-                  <div className="ms-stat-tile">
+                  <div className="ms-stat-tile" data-qa-time="true">
                     <span className="ms-stat-tile-label">Time</span>
                     <span className="ms-stat-tile-value">{fmtTime(elapsed)}</span>
                   </div>
-                  <div className="ms-stat-tile">
+                  <div className="ms-stat-tile" data-qa-revealed="true">
                     <span className="ms-stat-tile-label">Revealed</span>
                     <span className="ms-stat-tile-value">{revealedCount}/{totalSafe}</span>
                   </div>
-                  <div className="ms-stat-tile">
+                  <div className="ms-stat-tile" data-qa-accuracy="true">
                     <span className="ms-stat-tile-label">Accuracy</span>
                     <span className="ms-stat-tile-value">{accuracyPct}%</span>
                   </div>
