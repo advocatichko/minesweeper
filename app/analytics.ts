@@ -19,7 +19,9 @@ export type AnalyticsEventName =
   | "game_start"
   | "game_win"
   | "game_lose"
-  | "premium_click";
+  | "premium_click"
+  | "daily_start"
+  | "daily_share";
 
 // ── Allowed prop shapes per event ───────────────────────────────────────
 //
@@ -33,6 +35,8 @@ export type AnalyticsEventProps = {
   game_win: { difficulty: Difficulty; time_seconds: number; ts: number };
   game_lose: { difficulty: Difficulty; time_seconds: number; ts: number };
   premium_click: { ts: number };
+  daily_start: { date: string; ts: number };
+  daily_share: { date: string; method: "share" | "clipboard"; ts: number };
 };
 
 // ── Public helper ───────────────────────────────────────────────────────
