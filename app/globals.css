@@ -43,6 +43,18 @@ a {
   --ms-settings-bg:   #c8c8c8;
   --ms-new-best:      #b35c00;
   --ms-premium-color: #7b1fa2;
+
+  /* Game-over modal sizing tokens (structural — same values across themes).
+     Used by .ms-overlay-card / .ms-overlay-pill / .ms-stats-grid / .ms-stat-tile. */
+  --ms-tile-min:       88px;
+  --ms-tile-pad-y:     8px;
+  --ms-tile-pad-x:     12px;
+  --ms-tile-gap:       8px;
+  --ms-overlay-card-pad-y: 18px;
+  --ms-overlay-card-pad-x: 18px;
+  --ms-pill-pad-y:     4px;
+  --ms-pill-pad-x:     12px;
+  --ms-overlay-max-col: 6;
 }
 
 /* dark theme via media query (system preference) */
@@ -312,22 +324,30 @@ body {
   align-items: center;
   justify-content: center;
   z-index: 10;
+  padding: var(--ms-tile-gap);
 }
 
+/* Card width is capped by --ms-overlay-max-col tiles + gaps + padding so the
+   modal never grows past 6 tiles on huge screens, while staying inside the
+   board on narrow screens (overlay padding handles that side). */
 .ms-overlay-card {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 10px;
+  gap: var(--ms-tile-gap);
   background: var(--ms-card-bg);
   border: 3px solid;
   border-top-color: var(--ms-border-hi);
   border-left-color: var(--ms-border-hi);
   border-right-color: var(--ms-border-lo);
   border-bottom-color: var(--ms-border-lo);
-  padding: 16px 20px;
-  min-width: min(200px, 90%);
-  max-width: 90%;
+  padding: var(--ms-overlay-card-pad-y) var(--ms-overlay-card-pad-x);
+  width: 100%;
+  max-width: calc(
+    var(--ms-overlay-max-col) * var(--ms-tile-min)
+    + (var(--ms-overlay-max-col) - 1) * var(--ms-tile-gap)
+    + 2 * var(--ms-overlay-card-pad-x)
+  );
 }
 
 .ms-overlay-title {
@@ -335,20 +355,89 @@ body {
   font-weight: 700;
   text-align: center;
   color: var(--ms-text);
+  margin: 0;
 }
 
-.ms-overlay-details {
+/* Difficulty pill — own row above the stats grid. No absolute positioning,
+   so it cannot overlap the grid header. */
+.ms-overlay-pill {
+  align-self: center;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--ms-tile-gap);
+  padding: var(--ms-pill-pad-y) var(--ms-pill-pad-x);
+  background: var(--ms-btn-active-bg);
+  border: 1px solid;
+  border-top-color: var(--ms-border-hi);
+  border-left-color: var(--ms-border-hi);
+  border-right-color: var(--ms-border-lo);
+  border-bottom-color: var(--ms-border-lo);
+  border-radius: 2px;
+  font-family: var(--font-geist-mono), "Courier New", monospace;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  color: var(--ms-text);
+  line-height: 1;
+}
+
+/* Stats grid — auto-fit + minmax(min, 1fr) guarantees every tile is at least
+   --ms-tile-min wide (88px) and labels never clip. On narrow viewports tiles
+   wrap to fit (single column or 2x3); on wide viewports the grid caps at the
+   card's max-width above (which is sized for --ms-overlay-max-col tiles). */
+.ms-stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(var(--ms-tile-min), 1fr));
+  gap: var(--ms-tile-gap);
+  width: 100%;
+  min-width: 0;
+}
+
+.ms-stat-tile {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 3px;
-  font-size: 13px;
+  justify-content: center;
+  gap: 2px;
+  min-width: 0;
+  padding: var(--ms-tile-pad-y) var(--ms-tile-pad-x);
+  background: var(--ms-cell-open-bg);
+  border: 1px solid;
+  border-top-color: var(--ms-border-hi);
+  border-left-color: var(--ms-border-hi);
+  border-right-color: var(--ms-border-lo);
+  border-bottom-color: var(--ms-border-lo);
+  text-align: center;
+}
+
+.ms-stat-tile-label {
+  font-family: var(--font-geist-mono), "Courier New", monospace;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.4px;
   color: var(--ms-text-muted);
+  text-transform: uppercase;
+  max-width: 100%;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ms-stat-tile-value {
+  font-family: var(--font-geist-mono), "Courier New", monospace;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--ms-text);
+  max-width: 100%;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .ms-new-best {
   color: var(--ms-new-best);
   font-weight: 700;
+  margin: 0;
 }
 
 /* ad placeholder — future monetization surface */
