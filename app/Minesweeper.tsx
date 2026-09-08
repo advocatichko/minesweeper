@@ -126,10 +126,6 @@ function saveBest(lv: LevelName, secs: number): boolean {
   return false;
 }
 
-// Number colours for light / dark backgrounds
-const LIGHT_NUMS = ['', '#1976d2', '#388e3c', '#d32f2f', '#7b1fa2', '#ff8f00', '#0097a7', '#424242', '#616161'];
-const DARK_NUMS  = ['', '#64b5f6', '#81c784', '#ef9a9a', '#ce93d8', '#ffb74d', '#4dd0e1', '#e0e0e0', '#9e9e9e'];
-
 // ── Component ──────────────────────────────────────────────────────────────
 
 export default function Minesweeper() {
@@ -141,23 +137,17 @@ export default function Minesweeper() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [theme,        setTheme]        = useState<Theme>('system');
   const [soundOn,      setSoundOn]      = useState(true);
-  const [isDark,       setIsDark]       = useState(false);
   const [bestTimes,    setBestTimes]    = useState<Partial<Record<LevelName, number>>>({});
   const [isNewBest,    setIsNewBest]    = useState(false);
   const [streak,       setStreak]       = useState(0);
-  const [cellSize,     setCellSize]     = useState(() => {
-    if (typeof window === 'undefined') return 32;
-    const { cols } = LEVELS.easy;
-    // 16px body padding + 6px frame border + 14px board border+padding
-    const avail = window.innerWidth - 36 - (cols - 1) * 2;
-    return Math.min(48, Math.max(8, Math.floor(avail / cols)));
-  });
+  const [cellSize,     setCellSize]     = useState(32);
 
   const timerRef      = useRef<ReturnType<typeof setInterval> | null>(null);
   const touchTimerRef = useRef<ReturnType<typeof setTimeout>  | null>(null);
   const longPressed   = useRef(false);
   const elapsedRef    = useRef(0);
   const settingsRef   = useRef<HTMLDivElement>(null);
+  const frameRef      = useRef<HTMLDivElement>(null);
 
   const { rows, cols, mines } = LEVELS[level];
 
@@ -183,21 +173,15 @@ export default function Minesweeper() {
 
     if (theme === 'light') {
       document.documentElement.setAttribute('data-theme', 'light');
-      setIsDark(false);
       return;
     }
     if (theme === 'dark') {
       document.documentElement.setAttribute('data-theme', 'dark');
-      setIsDark(true);
       return;
     }
-    // system
+    // system: clear data-theme so the @media (prefers-color-scheme) rule
+    // in globals.css picks the palette. JS does not need to mirror it.
     document.documentElement.removeAttribute('data-theme');
-    const mq = window.matchMedia('(prefers-color-scheme: dark)');
-    setIsDark(mq.matches);
-    const handler = (e: MediaQueryListEvent) => setIsDark(e.matches);
-    mq.addEventListener('change', handler);
-    return () => mq.removeEventListener('change', handler);
   }, [theme]);
 
   // ── Sound persist ──────────────────────────────────────────────────────
@@ -258,18 +242,21 @@ export default function Minesweeper() {
     return () => document.removeEventListener('mousedown', handler);
   }, [settingsOpen]);
 
-  // ── Responsive cell size ───────────────────────────────────────────────
+  // ── Responsive cell size (measured off the actual frame, not viewport) ─
 
   useEffect(() => {
+    const el = frameRef.current;
+    if (!el) return;
+    // frame border 3px×2 = 6, board border+padding (3+4)×2 = 14, gap 2×(cols-1)
     const compute = () => {
-      const vw = window.innerWidth;
-      // 16px body-padding + 6px frame border + 14px board border+padding
-      const avail = vw - 36 - (cols - 1) * 2;
-      setCellSize(Math.min(48, Math.max(8, Math.floor(avail / cols))));
+      const w = el.offsetWidth;
+      const avail = w - 6 - 14 - (cols - 1) * 2;
+      setCellSize(Math.max(8, Math.min(48, Math.floor(avail / cols))));
     };
     compute();
-    window.addEventListener('resize', compute);
-    return () => window.removeEventListener('resize', compute);
+    const ro = new ResizeObserver(compute);
+    ro.observe(el);
+    return () => ro.disconnect();
   }, [cols]);
 
   // ── Record win ─────────────────────────────────────────────────────────
@@ -405,13 +392,12 @@ export default function Minesweeper() {
 
   // ── Render ─────────────────────────────────────────────────────────────
 
-  const numColors = isDark ? DARK_NUMS : LIGHT_NUMS;
   const best = bestTimes[level];
   const fontSize = Math.max(7, Math.floor(cellSize * 0.56));
 
   return (
     <div className="ms-wrap">
-      <div className="ms-frame">
+      <div className="ms-frame" ref={frameRef}>
 
         {/* ── Top bar ── */}
         <div className="ms-bar">
@@ -504,7 +490,9 @@ export default function Minesweeper() {
                     width: cellSize,
                     height: cellSize,
                     fontSize,
-                    color: cell.mine && cell.revealed ? '#fff' : numColors[cell.count],
+                    color: cell.mine && cell.revealed
+                      ? 'var(--ms-cell-mine-text)'
+                      : `var(--ms-cell-num-${cell.count})`,
                   }}
                   onClick={() => handleCellClick(r, c)}
                   onDoubleClick={() => handleChord(r, c)}
