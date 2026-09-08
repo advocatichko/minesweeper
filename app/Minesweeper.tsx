@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useCallback, useEffect, useRef } from 'react';
+import { track } from './analytics';
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -242,6 +243,7 @@ export default function Minesweeper() {
     const isNew = saveBest(lv, t);
     setIsNewBest(isNew);
     if (isNew) setBestTimes(prev => ({ ...prev, [lv]: t }));
+    track('game_win', { difficulty: lv, time_seconds: t, ts: Date.now() });
   }, []);
 
   // ── Game logic ─────────────────────────────────────────────────────────
@@ -267,6 +269,7 @@ export default function Minesweeper() {
       if (b[r][c].mine) {
         b.forEach(row => row.forEach(cl => { if (cl.mine) cl.revealed = true; }));
         setStatus('lost');
+        track('game_lose', { difficulty: level, time_seconds: elapsedRef.current, ts: Date.now() });
         if (soundOn) SFX.lose();
         return b;
       }
@@ -308,6 +311,7 @@ export default function Minesweeper() {
       b.forEach(row => row.forEach(cl => { if (cl.mine) cl.revealed = true; }));
       setBoard(b);
       setStatus('lost');
+      track('game_lose', { difficulty: level, time_seconds: elapsedRef.current, ts: Date.now() });
       if (soundOn) SFX.lose();
       return;
     }
@@ -335,6 +339,7 @@ export default function Minesweeper() {
     setFlags(0);
     setLevel(lv);
     setIsNewBest(false);
+    track('game_start', { difficulty: lv, ts: Date.now() });
   }, [level]);
 
   // ── Touch: long-press to flag ──────────────────────────────────────────
@@ -400,7 +405,7 @@ export default function Minesweeper() {
           >⚙</button>
           <button
             className="ms-btn ms-icon-btn ms-premium-btn"
-            onClick={() => {}}
+            onClick={() => track('premium_click', { ts: Date.now() })}
             title="Premium"
             aria-label="Premium"
           >💎</button>
