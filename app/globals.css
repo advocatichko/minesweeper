@@ -107,13 +107,14 @@ body {
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: flex-start;
-  padding: 8px;
+  justify-content: center;
+  padding: clamp(6px, 2vmin, 12px);
   background: var(--ms-page-bg);
   color: var(--ms-text);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  overflow-x: hidden;
 }
 
 /* ── Game wrapper ───────────────────────────────────────────────────────── */
@@ -130,17 +131,19 @@ body {
 .ms-bar {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 6px;
+  justify-content: center;
+  gap: 8px;
   background: var(--ms-page-bg);
   border: 3px solid;
   border-top-color: var(--ms-border-hi);
   border-left-color: var(--ms-border-hi);
   border-right-color: var(--ms-border-lo);
   border-bottom-color: var(--ms-border-lo);
-  padding: 4px 6px;
-  margin-bottom: 4px;
-  min-height: 44px;
+  padding: 6px 10px;
+  margin-bottom: 8px;
+  min-height: 48px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+  flex-wrap: wrap;
 }
 
 .ms-stats {
@@ -214,6 +217,10 @@ body {
   background: var(--ms-btn-active-bg);
 }
 
+.ms-btn:hover:not(.ms-btn-sel):not(:active) {
+  filter: brightness(1.08);
+}
+
 .ms-icon-btn {
   font-size: 15px;
   padding: 3px 5px;
@@ -260,11 +267,12 @@ body {
   color: var(--ms-text);
 }
 
-/* ── Board wrapper (relative, hosts overlay) ────────────────────────────── */
+/* ── Board wrapper (relative, hosts overlay) ─────────────────────────────── */
 .ms-board-wrap {
   position: relative;
-  display: inline-block;
+  display: block;
   line-height: 0;
+  margin: 0 auto;
 }
 
 /* ── Board grid ─────────────────────────────────────────────────────────── */
@@ -279,6 +287,18 @@ body {
   border-right-color: var(--ms-border-hi);
   border-bottom-color: var(--ms-border-hi);
   touch-action: manipulation;
+  box-shadow:
+    0 8px 32px rgba(0, 0, 0, 0.18),
+    0 2px 8px rgba(0, 0, 0, 0.12);
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+  will-change: transform;
+}
+
+.ms-board-wrap:hover .ms-board {
+  transform: translateY(-1px);
+  box-shadow:
+    0 12px 40px rgba(0, 0, 0, 0.22),
+    0 4px 12px rgba(0, 0, 0, 0.15);
 }
 
 /* ── Cells ──────────────────────────────────────────────────────────────── */
@@ -293,6 +313,9 @@ body {
   user-select: none;
   line-height: 1;
   -webkit-tap-highlight-color: transparent;
+  transition: background 0.08s ease, transform 0.06s ease, border-color 0.08s ease;
+  transform: translateZ(0);
+  backface-visibility: hidden;
 }
 
 .ms-hidden {
@@ -303,16 +326,46 @@ body {
   border-bottom-color: var(--ms-border-lo);
 }
 
+.ms-hidden:hover:not(.revealed):not(.flagged) {
+  background: color-mix(in srgb, var(--ms-cell-bg) 80%, white 10%);
+  transform: scale(0.95);
+  z-index: 1;
+}
+
+.ms-cell:active {
+  transform: scale(0.92) !important;
+  filter: brightness(0.95);
+}
+
 .ms-open {
   background: var(--ms-cell-open-bg);
   border-color: var(--ms-border-mid);
+  border-width: 1px;
   cursor: default;
 }
 
 .ms-mine {
   background: var(--ms-cell-mine-bg);
   border-color: var(--ms-border-mid);
+  border-width: 1px;
   cursor: default;
+  animation: mine-reveal 0.3s ease-out;
+}
+
+@keyframes mine-reveal {
+  0%   { transform: scale(0.5); opacity: 0.3; }
+  50%  { transform: scale(1.15); }
+  100% { transform: scale(1); opacity: 1; }
+}
+
+/* reveal cascade stagger */
+.ms-cell.revealed {
+  animation: cell-pop 0.12s ease-out both;
+}
+
+@keyframes cell-pop {
+  0%   { transform: scale(0.7); opacity: 0.4; }
+  100% { transform: scale(1); opacity: 1; }
 }
 
 /* ── Game-over overlay ──────────────────────────────────────────────────── */
@@ -325,6 +378,12 @@ body {
   justify-content: center;
   z-index: 10;
   padding: var(--ms-tile-gap);
+  animation: overlay-fade-in 0.25s ease-out;
+}
+
+@keyframes overlay-fade-in {
+  0%   { opacity: 0; }
+  100% { opacity: 1; }
 }
 
 /* Card width is capped by --ms-overlay-max-col tiles + gaps + padding so the
@@ -502,4 +561,104 @@ body {
     flex-direction: column;
     align-items: stretch;
   }
+}
+
+/* ── Inline controls row (difficulty + theme) above board ─────────────────── */
+.ms-controls-row {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 6px;
+  padding: 6px 0 4px;
+}
+
+.ms-controls-row .ms-btn-grp {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 3px;
+  align-items: center;
+}
+
+/* ── Compact overlay — small card over the board centre, not full-screen ───── */
+.ms-overlay {
+  position: absolute;
+  inset: 0;
+  background: var(--ms-overlay-bg);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10;
+  padding: 8px;
+  animation: overlay-fade-in 0.25s ease-out;
+}
+
+.ms-overlay-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  background: var(--ms-card-bg);
+  border: 3px solid;
+  border-top-color: var(--ms-border-hi);
+  border-left-color: var(--ms-border-hi);
+  border-right-color: var(--ms-border-lo);
+  border-bottom-color: var(--ms-border-lo);
+  padding: 16px 14px;
+  width: 100%;
+  max-width: 320px;
+}
+
+.ms-stats-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 6px;
+  width: 100%;
+}
+
+.ms-stat-tile {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  padding: 8px 6px;
+  background: var(--ms-cell-open-bg);
+  border: 1px solid;
+  border-top-color: var(--ms-border-hi);
+  border-left-color: var(--ms-border-hi);
+  border-right-color: var(--ms-border-lo);
+  border-bottom-color: var(--ms-border-lo);
+  text-align: center;
+}
+
+.ms-stat-tile-label {
+  font-family: var(--font-geist-mono), "Courier New", monospace;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.4px;
+  color: var(--ms-text-muted);
+  text-transform: uppercase;
+  line-height: 1.1;
+}
+
+.ms-stat-tile-value {
+  font-family: var(--font-geist-mono), "Courier New", monospace;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--ms-text);
+  line-height: 1.1;
+}
+
+.ms-play-again {
+  font-size: 13px;
+  padding: 6px 18px;
+  min-height: 32px;
+}
+
+.ms-overlay-share {
+  display: flex;
+  flex-direction: row;
+  gap: 6px;
+  width: 100%;
+  justify-content: center;
 }

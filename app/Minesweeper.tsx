@@ -522,12 +522,11 @@ export default function Minesweeper() {
             aria-label="New game"
           >↻</button>
           <button
-            className="ms-btn ms-icon-btn"
-            onClick={() => setSettingsOpen(o => !o)}
-            title="Settings"
-            aria-label="Settings"
-            aria-expanded={settingsOpen}
-          >⚙</button>
+            className={`ms-btn ms-icon-btn${soundOn ? ' ms-btn-sel' : ''}`}
+            onClick={() => setSoundOn(s => !s)}
+            title={soundOn ? 'Mute' : 'Unmute'}
+            aria-label="Toggle sound"
+          >{soundOn ? '🔊' : '🔇'}</button>
           <button
             className="ms-btn ms-icon-btn ms-premium-btn"
             onClick={() => track('premium_click', { ts: Date.now() })}
@@ -537,51 +536,33 @@ export default function Minesweeper() {
         </div>
       </div>
 
-      {/* ── Settings panel ── */}
-      {settingsOpen && (
-        <div className="ms-settings" role="region" aria-label="Settings">
-          <div className="ms-settings-row">
-            <span className="ms-settings-lbl">Difficulty</span>
-            <div className="ms-btn-grp">
-              {(Object.keys(LEVELS) as LevelName[]).map(lv => (
-                <button
-                  key={lv}
-                  className={`ms-btn${lv === level ? ' ms-btn-sel' : ''}`}
-                  onClick={() => { reset(lv); setIsDaily(false); setSettingsOpen(false); }}
-                >
-                  {lv[0].toUpperCase() + lv.slice(1)}
-                </button>
-              ))}
-            </div>
-          </div>
-          <div className="ms-settings-row">
-            <span className="ms-settings-lbl">Theme</span>
-            <div className="ms-btn-grp">
-              {(['system', 'light', 'dark'] as Theme[]).map(t => (
-                <button
-                  key={t}
-                  className={`ms-btn${t === theme ? ' ms-btn-sel' : ''}`}
-                  onClick={() => setTheme(t)}
-                >
-                  {t === 'system' ? '💻 System' : t === 'light' ? '☀ Light' : '🌙 Dark'}
-                </button>
-              ))}
-            </div>
-          </div>
-          <div className="ms-settings-row">
-            <span className="ms-settings-lbl">Sound</span>
-            <button
-              className={`ms-btn${soundOn ? ' ms-btn-sel' : ''}`}
-              onClick={() => setSoundOn(s => !s)}
-            >
-              {soundOn ? '🔊 On' : '🔇 Off'}
-            </button>
-          </div>
-        </div>
-      )}
-
       {/* ── Board ── */}
       <div className="ms-board-wrap">
+        {/* ── Inline difficulty + theme row ── */}
+        <div className="ms-controls-row">
+          <div className="ms-btn-grp">
+            {(Object.keys(LEVELS) as LevelName[]).map(lv => (
+              <button
+                key={lv}
+                className={`ms-btn${lv === level ? ' ms-btn-sel' : ''}`}
+                onClick={() => { reset(lv); setIsDaily(false); }}
+              >
+                {lv[0].toUpperCase() + lv.slice(1)}
+              </button>
+            ))}
+          </div>
+          <div className="ms-btn-grp">
+            {(['system', 'light', 'dark'] as Theme[]).map(t => (
+              <button
+                key={t}
+                className={`ms-btn${t === theme ? ' ms-btn-sel' : ''}`}
+                onClick={() => setTheme(t)}
+              >
+                {t === 'system' ? '💻' : t === 'light' ? '☀' : '🌙'}
+              </button>
+            ))}
+          </div>
+        </div>
         <div
           className="ms-board"
           style={{ gridTemplateColumns: `repeat(${cols}, ${cellSize}px)` }}

@@ -1,0 +1,2 @@
+# Worktrees with unmerged test fixtures (no vitest/playwright deps)
+wt-issue-*/
