@@ -37,7 +37,7 @@ a {
   --ms-cell-mine-bg:  #e53935;
   --ms-btn-bg:        #c0c0c0;
   --ms-btn-active-bg: #a8a8a8;
-  --ms-overlay-bg:    rgba(192, 192, 192, 0.97);
+  --ms-overlay-bg:    rgba(192, 192, 192, 0.62);
   --ms-card-bg:       #c0c0c0;
   --ms-ad-bg:         #d0d0d0;
   --ms-settings-bg:   #c8c8c8;
@@ -71,7 +71,7 @@ a {
     --ms-cell-mine-bg:  #b71c1c;
     --ms-btn-bg:        #3a3a3a;
     --ms-btn-active-bg: #555555;
-    --ms-overlay-bg:    rgba(28, 28, 28, 0.97);
+    --ms-overlay-bg:    rgba(28, 28, 28, 0.62);
     --ms-card-bg:       #2a2a2a;
     --ms-ad-bg:         #333333;
     --ms-settings-bg:   #252525;
@@ -93,7 +93,7 @@ a {
   --ms-cell-mine-bg:  #b71c1c;
   --ms-btn-bg:        #3a3a3a;
   --ms-btn-active-bg: #555555;
-  --ms-overlay-bg:    rgba(28, 28, 28, 0.97);
+  --ms-overlay-bg:    rgba(28, 28, 28, 0.62);
   --ms-card-bg:       #2a2a2a;
   --ms-ad-bg:         #333333;
   --ms-settings-bg:   #252525;
@@ -369,17 +369,10 @@ body {
 }
 
 /* ── Game-over overlay ──────────────────────────────────────────────────── */
-.ms-overlay {
-  position: absolute;
-  inset: 0;
-  background: var(--ms-overlay-bg);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 10;
-  padding: var(--ms-tile-gap);
-  animation: overlay-fade-in 0.25s ease-out;
-}
+/* NOTE: the overlay rules live in the "Compact overlay" section further down
+   this file — that block is the effective one. Do not re-declare these
+   selectors here: at equal specificity the LAST block wins, so a second
+   declaration would be dead code that misleads whoever debugs a layout bug. */
 
 @keyframes overlay-fade-in {
   0%   { opacity: 0; }
@@ -579,6 +572,18 @@ body {
   align-items: center;
 }
 
+/* ── Board holder ─────────────────────────────────────────────────────────── */
+/* Positioning context for the game-over overlay. The overlay must cover the
+   minefield only — never the controls row above it — so it lives inside a
+   wrapper that hugs the board exactly (fit-content) instead of the whole
+   board-wrap column. */
+.ms-board-holder {
+  position: relative;
+  display: block;
+  width: fit-content;
+  margin: 0 auto;
+}
+
 /* ── Compact overlay — small card over the board centre, not full-screen ───── */
 .ms-overlay {
   position: absolute;
@@ -590,6 +595,9 @@ body {
   z-index: 10;
   padding: 8px;
   animation: overlay-fade-in 0.25s ease-out;
+  /* The scrim must not eat clicks: the minefield underneath stays readable
+     and interactive, the card re-enables pointer events for itself. */
+  pointer-events: none;
 }
 
 .ms-overlay-card {
@@ -605,7 +613,11 @@ body {
   border-bottom-color: var(--ms-border-lo);
   padding: 16px 14px;
   width: 100%;
-  max-width: 320px;
+  /* Scale with the board: 62% of the minefield width, hard-capped at 320px.
+     A fixed px cap can never satisfy the "overlay must not cover the whole
+     field" directive on small boards — 320px is wider than a 9x9 field. */
+  max-width: min(320px, 62%);
+  pointer-events: auto;
 }
 
 .ms-stats-grid {

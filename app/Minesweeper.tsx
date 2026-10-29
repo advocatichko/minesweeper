@@ -563,6 +563,9 @@ export default function Minesweeper() {
             ))}
           </div>
         </div>
+        {/* Board holder — positioning context for the game-over overlay, so the
+            overlay covers the minefield only and never the controls row. */}
+        <div className="ms-board-holder">
         <div
           className="ms-board"
           style={{ gridTemplateColumns: `repeat(${cols}, ${cellSize}px)` }}
@@ -654,8 +657,6 @@ export default function Minesweeper() {
                     <span className="ms-stat-tile-value">{accuracyPct}%</span>
                   </div>
                 </div>
-                {/* Ad placeholder — future monetization surface */}
-                <div className="ms-ad-slot" aria-hidden="true" />
                 <div className="ms-overlay-share">
                   <button className="ms-btn ms-play-again" onClick={() => { reset(); setIsDaily(false); }}>
                     Play Again
@@ -673,6 +674,7 @@ export default function Minesweeper() {
             </div>
           );
         })()}
+        </div>
       </div>
 
     </div>
