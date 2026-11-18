@@ -55,6 +55,22 @@ a {
   --ms-pill-pad-y:     4px;
   --ms-pill-pad-x:     12px;
   --ms-overlay-max-col: 6;
+
+  /* Page shell (game card) — frames the top bar + board so the card is not
+     glued to the board's exact pixel width on wide screens. The board and
+     cells keep their classic capped size; only the frame gets wider. */
+  --ms-shell-min:      640px;
+  --ms-shell-pad:      clamp(4px, 2vw, 16px);
+  --ms-shell-border:   3px;
+  --ms-shell-gap:      0;
+
+  /* Motion tokens */
+  --ms-dur-reveal:     120ms;
+  --ms-dur-overlay:    200ms;
+  --ms-dur-loss:       150ms;
+
+  /* Text colour on a revealed (red) mine cell */
+  --ms-mine-text:      #ffffff;
 }
 
 /* dark theme via media query (system preference) */
@@ -117,21 +133,35 @@ body {
   overflow-x: hidden;
 }
 
-/* ── Game wrapper ───────────────────────────────────────────────────────── */
+/* ── Game wrapper (page shell / game card) ──────────────────────────────── */
+/* Grows to fit wide boards (hard), but never narrower than --ms-shell-min on
+   roomy viewports, so small boards sit centred inside a framed card instead
+   of the whole UI shrinking to the board's pixel width. On phones the
+   min-width collapses to 100% of the body. Cell sizing in Minesweeper.tsx
+   measures this element's padding/border, so changing the tokens is safe. */
 .ms-wrap {
   display: flex;
   flex-direction: column;
   align-items: stretch;   /* children fill wrapper width */
   width: fit-content;
-  max-width: calc(100vw - 16px);
-  gap: 0;
+  min-width: min(100%, var(--ms-shell-min));
+  max-width: 100%;
+  gap: var(--ms-shell-gap);
+  padding: var(--ms-shell-pad);
+  background: var(--ms-settings-bg);
+  border: var(--ms-shell-border) solid;
+  border-top-color: var(--ms-border-hi);
+  border-left-color: var(--ms-border-hi);
+  border-right-color: var(--ms-border-lo);
+  border-bottom-color: var(--ms-border-lo);
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.12);
 }
 
 /* ── Top bar ────────────────────────────────────────────────────────────── */
 .ms-bar {
   display: flex;
   align-items: center;
-  justify-content: center;
+  justify-content: space-between;
   gap: 8px;
   background: var(--ms-page-bg);
   border: 3px solid;
@@ -349,6 +379,7 @@ body {
   border-color: var(--ms-border-mid);
   border-width: 1px;
   cursor: default;
+  color: var(--ms-mine-text);
   animation: mine-reveal 0.3s ease-out;
 }
 
@@ -358,9 +389,22 @@ body {
   100% { transform: scale(1); opacity: 1; }
 }
 
-/* reveal cascade stagger */
-.ms-cell.revealed {
-  animation: cell-pop 0.12s ease-out both;
+/* reveal pop — fires when a cell switches ms-hidden → ms-open */
+.ms-open {
+  animation: cell-pop var(--ms-dur-reveal) ease-out both;
+}
+
+/* ── Loss flash — short red flash + shake when the game is lost ─────────── */
+.ms-board.ms-board-lost {
+  animation: ms-loss-flash var(--ms-dur-loss) ease-out;
+}
+
+@keyframes ms-loss-flash {
+  0%   { transform: translateX(0);    filter: none; }
+  20%  { transform: translateX(-4px); filter: brightness(1.25) sepia(1) hue-rotate(-50deg) saturate(4); }
+  45%  { transform: translateX(4px); }
+  70%  { transform: translateX(-2px); }
+  100% { transform: translateX(0);    filter: none; }
 }
 
 @keyframes cell-pop {
@@ -594,7 +638,7 @@ body {
   justify-content: center;
   z-index: 10;
   padding: 8px;
-  animation: overlay-fade-in 0.25s ease-out;
+  animation: overlay-fade-in var(--ms-dur-overlay) ease-out;
   /* The scrim must not eat clicks: the minefield underneath stays readable
      and interactive, the card re-enables pointer events for itself. */
   pointer-events: none;
@@ -673,4 +717,21 @@ body {
   gap: 6px;
   width: 100%;
   justify-content: center;
+}
+
+/* ── Reduced motion ───────────────────────────────────────────────────────── */
+/* Keep the loss flash as a colour cue, drop the movement. */
+@media (prefers-reduced-motion: reduce) {
+  .ms-open,
+  .ms-mine {
+    animation: none;
+  }
+  .ms-board,
+  .ms-cell {
+    transition: none;
+  }
+  @keyframes ms-loss-flash {
+    0%, 100% { filter: none; }
+    30%      { filter: brightness(1.25) sepia(1) hue-rotate(-50deg) saturate(4); }
+  }
 }
