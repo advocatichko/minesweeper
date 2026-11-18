@@ -210,6 +210,7 @@ export default function Minesweeper() {
   const longPressed      = useRef(false);
   const elapsedRef       = useRef(0);
   const streakUpdatedRef = useRef(false);
+  const wrapRef          = useRef<HTMLDivElement | null>(null);
 
   const { rows, cols, mines } = LEVELS[level];
 
@@ -281,10 +282,19 @@ export default function Minesweeper() {
   // ── Responsive cell size ───────────────────────────────────────────────
 
   useEffect(() => {
+    // Horizontal padding + border of an element, read from computed CSS so the
+    // page/shell chrome is defined only once (in globals.css).
+    const chromeX = (el: Element | null) => {
+      if (!el) return 0;
+      const cs = getComputedStyle(el);
+      return (parseFloat(cs.paddingLeft) || 0) + (parseFloat(cs.paddingRight) || 0)
+        + (parseFloat(cs.borderLeftWidth) || 0) + (parseFloat(cs.borderRightWidth) || 0);
+    };
     const compute = () => {
-      const vw = window.innerWidth;
-      // 8px body-padding each side + board: 3px border×2 + 4px padding×2
-      const avail = vw - 16 - 14 - (cols - 1) * 2;
+      // Use clientWidth (excludes a vertical scrollbar) rather than innerWidth.
+      const vw = document.documentElement.clientWidth || window.innerWidth;
+      // body padding + game-card shell padding/border + board: 3px border×2 + 4px padding×2
+      const avail = vw - chromeX(document.body) - chromeX(wrapRef.current) - 14 - (cols - 1) * 2;
       setCellSize(Math.min(32, Math.max(8, Math.floor(avail / cols))));
     };
     compute();
@@ -491,7 +501,7 @@ export default function Minesweeper() {
   const fontSize = Math.max(7, Math.floor(cellSize * 0.56));
 
   return (
-    <div className="ms-wrap">
+    <div className="ms-wrap" ref={wrapRef}>
 
       {/* ── Top bar ── */}
       <div className="ms-bar">
@@ -567,7 +577,7 @@ export default function Minesweeper() {
             overlay covers the minefield only and never the controls row. */}
         <div className="ms-board-holder">
         <div
-          className="ms-board"
+          className={`ms-board${status === 'lost' ? ' ms-board-lost' : ''}`}
           style={{ gridTemplateColumns: `repeat(${cols}, ${cellSize}px)` }}
           onTouchMove={cancelLongPress}
         >
@@ -580,7 +590,8 @@ export default function Minesweeper() {
                   width: cellSize,
                   height: cellSize,
                   fontSize,
-                  color: cell.mine && cell.revealed ? '#fff' : numColors[cell.count],
+                  // revealed mines take their text colour from .ms-mine (--ms-mine-text)
+                  color: cell.mine && cell.revealed ? undefined : numColors[cell.count],
                 }}
                 onClick={() => handleCellClick(r, c)}
                 onDoubleClick={() => handleChord(r, c)}
